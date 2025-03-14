@@ -1,0 +1,15 @@
+path: C:/Users/mathi/OneDrive/Desktop/project/YOLOv8-Person-Detection/datasets  # Base directory
+train: C:\Users\mathi\OneDrive\Desktop\project\YOLOv8-Person-Detection\datasets\images  # Training images
+val: C:\Users\mathi\OneDrive\Desktop\project\YOLOv8-Person-Detection\datasets\images      # Validation images
+
+names:
+  0: person
+  1: hard-hat
+  2: gloves
+  3: mask
+  4: glasses
+  5: boots
+  6: vest
+  7: ppe-suit
+  8: ear-protector
+  9: safety-harness
