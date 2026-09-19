@@ -1,4 +1,3 @@
-
 import cv2
 import os
 import json
@@ -10,10 +9,6 @@ import numpy as np
 import tkinter as tk
 from PIL import Image, ImageTk
 
-
-# ============================================================
-# PATHS
-# ============================================================
 
 FACE_DETECTOR = "models/face_detection_yunet_2026may.onnx"
 FACE_RECOGNIZER = "models/face_recognition_sface_2021dec.onnx"
@@ -27,59 +22,38 @@ OUTPUT_FOLDER = "output"
 ATTENDANCE_FILE = "output/attendance.csv"
 
 
-# ============================================================
-# SETTINGS
-# ============================================================
-
 FACE_MATCH_THRESHOLD = 0.45
 
 CHECK_IN_SECONDS = 3.0
 CHECK_OUT_SECONDS = 3.0
-
-# Person must be absent for this long before
-# checkout timer becomes available.
 LEAVE_SECONDS = 1.0
 
 CAMERA_WIDTH = 960
 CAMERA_HEIGHT = 720
 
 
-# ============================================================
-# ADMIN INFORMATION
-# ============================================================
-
 ADMIN_ID = 1
 ADMIN_NAME = "ADMIN"
 
 
-# ============================================================
-# CHECK FILES
-# ============================================================
-
+# Check required files
 if not os.path.exists(FACE_DETECTOR):
-
     print("ERROR: YuNet model not found.")
     print(f"Expected: {FACE_DETECTOR}")
     exit()
 
-
 if not os.path.exists(FACE_RECOGNIZER):
-
     print("ERROR: SFace model not found.")
     print(f"Expected: {FACE_RECOGNIZER}")
     exit()
 
-
 if not os.path.exists(ADMIN_FEATURE):
-
     print("ERROR: Admin face is not registered.")
     print("Run:")
     print("python admin_register.py")
     exit()
 
-
 if not os.path.exists(CANDIDATE_DATA):
-
     print("ERROR: No candidate registration data found.")
     print()
     print("Run:")
@@ -87,65 +61,40 @@ if not os.path.exists(CANDIDATE_DATA):
     exit()
 
 
-os.makedirs(
-    OUTPUT_FOLDER,
-    exist_ok=True
-)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 
-# ============================================================
-# LOAD ADMIN FEATURE
-# ============================================================
-
-admin_feature = np.load(
-    ADMIN_FEATURE
-)
+# Load registered admin feature
+admin_feature = np.load(ADMIN_FEATURE)
 
 
-# ============================================================
-# LOAD CANDIDATES
-# ============================================================
-
+# Load candidate registration data
 try:
-
     with open(
         CANDIDATE_DATA,
         "r",
         encoding="utf-8"
     ) as file:
-
         candidates = json.load(file)
 
 except Exception as error:
-
     print("ERROR: Could not load candidates.json")
     print(error)
     exit()
 
 
-# ============================================================
-# LOAD CANDIDATE FEATURES
-# ============================================================
-
+# Load candidate face features
 candidate_features = []
-
 
 print()
 print("==========================================")
 print("LOADING CANDIDATES")
 print("==========================================")
 
-
 for candidate in candidates:
-
     try:
-
-        candidate_id = int(
-            candidate["id"]
-        )
-
+        candidate_id = int(candidate["id"])
         candidate_name = candidate["name"]
-
         feature_filename = candidate["feature"]
 
         feature_path = os.path.join(
@@ -154,17 +103,13 @@ for candidate in candidates:
         )
 
         if not os.path.exists(feature_path):
-
             print(
                 f"WARNING: Feature file missing for "
                 f"{candidate_name}"
             )
-
             continue
 
-        feature = np.load(
-            feature_path
-        )
+        feature = np.load(feature_path)
 
         candidate_features.append(
             {
@@ -180,11 +125,7 @@ for candidate in candidates:
         )
 
     except Exception as error:
-
-        print(
-            "Could not load candidate:",
-            error
-        )
+        print("Could not load candidate:", error)
 
 
 print("==========================================")
@@ -196,10 +137,7 @@ print("==========================================")
 print()
 
 
-# ============================================================
-# LOAD OPENCV MODELS
-# ============================================================
-
+# Load OpenCV face models
 detector = cv2.FaceDetectorYN.create(
     FACE_DETECTOR,
     "",
@@ -209,31 +147,18 @@ detector = cv2.FaceDetectorYN.create(
     5000
 )
 
-
 recognizer = cv2.FaceRecognizerSF.create(
     FACE_RECOGNIZER,
     ""
 )
 
 
-# ============================================================
-# CAMERA
-# ============================================================
-
 camera = None
 camera_running = False
 
 
-# ============================================================
-# ATTENDANCE PEOPLE
-#
-# Admin + Candidates
-# ============================================================
-
+# Build the attendance list
 attendance_people = []
-
-
-# Add ADMIN
 
 attendance_people.append(
     {
@@ -244,11 +169,7 @@ attendance_people.append(
     }
 )
 
-
-# Add candidates
-
 for candidate in candidate_features:
-
     attendance_people.append(
         {
             "id": candidate["id"],
@@ -265,7 +186,6 @@ print("ATTENDANCE PEOPLE")
 print("==========================================")
 
 for person in attendance_people:
-
     print(
         f"ID {person['id']} - "
         f"{person['name']}"
@@ -275,94 +195,34 @@ print("==========================================")
 print()
 
 
-# ============================================================
-# ATTENDANCE STATE
-# ============================================================
-
 attendance_state = {}
 
-
 for person in attendance_people:
-
     person_id = person["id"]
 
     attendance_state[person_id] = {
-
-        # ----------------------------------------
-        # Attendance status
-        # ----------------------------------------
-
         "checked_in": False,
-
-        # ----------------------------------------
-        # Is face currently visible?
-        # ----------------------------------------
-
         "currently_visible": False,
-
-        # ----------------------------------------
-        # Check-in / return timer
-        # ----------------------------------------
-
         "visible_start": None,
-
-        # ----------------------------------------
-        # Leave timer
-        # ----------------------------------------
-
         "leave_start": None,
-
-        # ----------------------------------------
-        # Actual check-in datetime
-        # ----------------------------------------
-
         "check_in_time": None,
-
-        # ----------------------------------------
-        # Actual check-out datetime
-        # ----------------------------------------
-
         "check_out_time": None,
-
-        # ----------------------------------------
-        # Return detected after leaving
-        # ----------------------------------------
-
         "checkout_pending": False,
-
-        # ----------------------------------------
-        # Prevent immediate re-check-in after
-        # checkout while person remains visible
-        # ----------------------------------------
-
         "completed_today": False
     }
 
 
-# ============================================================
-# CURRENT DAY
-# ============================================================
+today = datetime.now().strftime("%Y-%m-%d")
 
-today = datetime.now().strftime(
-    "%Y-%m-%d"
-)
-
-
-# ============================================================
-# ATTENDANCE CSV
-# ============================================================
 
 def create_attendance_file():
-
     if not os.path.exists(ATTENDANCE_FILE):
-
         with open(
             ATTENDANCE_FILE,
             "w",
             newline="",
             encoding="utf-8"
         ) as file:
-
             writer = csv.writer(file)
 
             writer.writerow(
@@ -381,18 +241,11 @@ def create_attendance_file():
 create_attendance_file()
 
 
-# ============================================================
-# FIND PERSON
-# ============================================================
-
 def find_person(feature):
-
     best_person = None
-
     best_score = -1
 
     for person in attendance_people:
-
         score = recognizer.match(
             feature,
             person["feature"],
@@ -400,42 +253,21 @@ def find_person(feature):
         )
 
         if score > best_score:
-
             best_score = score
-
             best_person = person
 
     if best_person is not None:
-
         if best_score >= FACE_MATCH_THRESHOLD:
+            return best_person, best_score
 
-            return (
-                best_person,
-                best_score
-            )
+    return None, best_score
 
-    return (
-        None,
-        best_score
-    )
-
-
-# ============================================================
-# FORMAT DURATION
-# ============================================================
 
 def format_duration(seconds):
-
-    seconds = int(
-        max(0, seconds)
-    )
+    seconds = int(max(0, seconds))
 
     hours = seconds // 3600
-
-    minutes = (
-        seconds % 3600
-    ) // 60
-
+    minutes = (seconds % 3600) // 60
     seconds = seconds % 60
 
     return (
@@ -445,66 +277,36 @@ def format_duration(seconds):
     )
 
 
-# ============================================================
-# GET PERSON
-# ============================================================
-
 def get_person(person_id):
-
     for person in attendance_people:
-
         if person["id"] == person_id:
-
             return person
 
     return None
 
 
-# ============================================================
-# CHECK IN
-# ============================================================
-
 def check_in(person_id):
-
-    person = get_person(
-        person_id
-    )
+    person = get_person(person_id)
 
     if person is None:
-
         return
 
-    state = attendance_state[
-        person_id
-    ]
+    state = attendance_state[person_id]
 
-    # Already checked in
     if state["checked_in"]:
-
         return
 
-    # Already completed today's attendance
     if state["completed_today"]:
-
         return
 
     now = datetime.now()
 
     state["checked_in"] = True
-
     state["currently_visible"] = True
-
     state["leave_start"] = None
-
     state["checkout_pending"] = False
-
     state["check_in_time"] = now
-
     state["check_out_time"] = None
-
-    # --------------------------------------------------------
-    # WRITE CSV
-    # --------------------------------------------------------
 
     with open(
         ATTENDANCE_FILE,
@@ -512,7 +314,6 @@ def check_in(person_id):
         newline="",
         encoding="utf-8"
     ) as file:
-
         writer = csv.writer(file)
 
         writer.writerow(
@@ -531,33 +332,19 @@ def check_in(person_id):
     print("------------------------------------------")
     print("CHECK IN SUCCESSFUL")
     print("------------------------------------------")
-    print(
-        f"ID   : {person['id']}"
-    )
-    print(
-        f"Name : {person['name']}"
-    )
-    print(
-        f"Time : {now.strftime('%H:%M:%S')}"
-    )
+    print(f"ID   : {person['id']}")
+    print(f"Name : {person['name']}")
+    print(f"Time : {now.strftime('%H:%M:%S')}")
     print("------------------------------------------")
     print()
 
-
-# ============================================================
-# UPDATE CSV CHECK-OUT
-# ============================================================
 
 def update_checkout_csv(
     person_id,
     check_out_time,
     duration
 ):
-
-    if not os.path.exists(
-        ATTENDANCE_FILE
-    ):
-
+    if not os.path.exists(ATTENDANCE_FILE):
         return
 
     rows = []
@@ -568,21 +355,13 @@ def update_checkout_csv(
         newline="",
         encoding="utf-8"
     ) as file:
-
         reader = csv.DictReader(file)
-
         fieldnames = reader.fieldnames
 
         for row in reader:
-
             try:
-
-                row_id = int(
-                    row["ID"]
-                )
-
+                row_id = int(row["ID"])
             except:
-
                 row_id = -1
 
             if (
@@ -591,15 +370,11 @@ def update_checkout_csv(
                 and row["Check In"]
                 and not row["Check Out"]
             ):
-
                 row["Check Out"] = (
-                    check_out_time.strftime(
-                        "%H:%M:%S"
-                    )
+                    check_out_time.strftime("%H:%M:%S")
                 )
 
                 row["Duration"] = duration
-
                 row["Status"] = "Completed"
 
             rows.append(row)
@@ -610,41 +385,27 @@ def update_checkout_csv(
         newline="",
         encoding="utf-8"
     ) as file:
-
         writer = csv.DictWriter(
             file,
             fieldnames=fieldnames
         )
 
         writer.writeheader()
-
         writer.writerows(rows)
 
 
-# ============================================================
-# CHECK OUT
-# ============================================================
-
 def check_out(person_id):
-
-    person = get_person(
-        person_id
-    )
+    person = get_person(person_id)
 
     if person is None:
-
         return
 
-    state = attendance_state[
-        person_id
-    ]
+    state = attendance_state[person_id]
 
     if not state["checked_in"]:
-
         return
 
     if state["check_in_time"] is None:
-
         return
 
     now = datetime.now()
@@ -665,85 +426,40 @@ def check_out(person_id):
         duration
     )
 
-    # --------------------------------------------------------
-    # RESET LIVE STATE
-    # --------------------------------------------------------
-
     state["checked_in"] = False
-
     state["currently_visible"] = True
-
     state["visible_start"] = None
-
     state["leave_start"] = None
-
     state["checkout_pending"] = False
-
     state["check_in_time"] = None
-
     state["check_out_time"] = None
 
-    # Prevent another check-in today
     state["completed_today"] = True
 
     print()
     print("------------------------------------------")
     print("CHECK OUT SUCCESSFUL")
     print("------------------------------------------")
-    print(
-        f"ID       : {person['id']}"
-    )
-    print(
-        f"Name     : {person['name']}"
-    )
-    print(
-        f"Time     : {now.strftime('%H:%M:%S')}"
-    )
-    print(
-        f"Duration : {duration}"
-    )
+    print(f"ID       : {person['id']}")
+    print(f"Name     : {person['name']}")
+    print(f"Time     : {now.strftime('%H:%M:%S')}")
+    print(f"Duration : {duration}")
     print("------------------------------------------")
     print()
 
 
-# ============================================================
-# PROCESS RECOGNIZED PERSON
-# ============================================================
-
-def process_person(
-    person,
-    current_time
-):
-
+def process_person(person, current_time):
     person_id = person["id"]
 
-    state = attendance_state[
-        person_id
-    ]
+    state = attendance_state[person_id]
 
-    # Person is visible
     state["currently_visible"] = True
 
-    # ========================================================
-    # ALREADY COMPLETED TODAY
-    # ========================================================
-
     if state["completed_today"]:
-
         return
 
-    # ========================================================
-    # NOT CHECKED IN
-    # ========================================================
-
     if not state["checked_in"]:
-
-        # ----------------------------------------------------
-        # START CHECK-IN TIMER
-        # ----------------------------------------------------
-
         if state["visible_start"] is None:
-
             state["visible_start"] = current_time
 
             print(
@@ -759,31 +475,13 @@ def process_person(
             - state["visible_start"]
         )
 
-        # ----------------------------------------------------
-        # CHECK IN
-        # ----------------------------------------------------
-
         if elapsed >= CHECK_IN_SECONDS:
-
-            check_in(
-                person_id
-            )
+            check_in(person_id)
 
         return
 
-    # ========================================================
-    # ALREADY CHECKED IN
-    # ========================================================
-
-    # --------------------------------------------------------
-    # PERSON LEFT AND HAS RETURNED
-    # --------------------------------------------------------
-
     if state["checkout_pending"]:
-
-        # Start return timer
         if state["visible_start"] is None:
-
             state["visible_start"] = current_time
 
             print()
@@ -800,66 +498,31 @@ def process_person(
             - state["visible_start"]
         )
 
-        # ----------------------------------------------------
-        # CHECK OUT
-        # ----------------------------------------------------
-
         if elapsed >= CHECK_OUT_SECONDS:
-
-            check_out(
-                person_id
-            )
+            check_out(person_id)
 
         return
 
-    # ========================================================
-    # NORMAL CHECKED-IN STATE
-    # ========================================================
-
     state["leave_start"] = None
 
-
-# ============================================================
-# PROCESS PEOPLE NOT VISIBLE
-# ============================================================
 
 def process_missing_people(
     visible_ids,
     current_time
 ):
-
     for person in attendance_people:
-
         person_id = person["id"]
 
-        state = attendance_state[
-            person_id
-        ]
-
-        # ====================================================
-        # FACE NOT VISIBLE
-        # ====================================================
+        state = attendance_state[person_id]
 
         if person_id not in visible_ids:
-
             state["currently_visible"] = False
 
-            # ------------------------------------------------
-            # NOT CHECKED IN
-            # ------------------------------------------------
-
             if not state["checked_in"]:
-
                 state["visible_start"] = None
-
                 continue
 
-            # ------------------------------------------------
-            # ALREADY CHECKED IN
-            # ------------------------------------------------
-
             if state["leave_start"] is None:
-
                 state["leave_start"] = current_time
 
             elapsed = (
@@ -867,16 +530,9 @@ def process_missing_people(
                 - state["leave_start"]
             )
 
-            # ------------------------------------------------
-            # PERSON HAS LEFT
-            # ------------------------------------------------
-
             if elapsed >= LEAVE_SECONDS:
-
                 if not state["checkout_pending"]:
-
                     state["checkout_pending"] = True
-
                     state["visible_start"] = None
 
                     print()
@@ -890,41 +546,20 @@ def process_missing_people(
                     )
 
 
-# ============================================================
-# GET DISPLAY INFORMATION
-# ============================================================
-
 def get_display_status(
     person_id,
     current_time
 ):
-
-    state = attendance_state[
-        person_id
-    ]
-
-    # ========================================================
-    # COMPLETED
-    # ========================================================
+    state = attendance_state[person_id]
 
     if state["completed_today"]:
-
-        return (
-            "COMPLETED",
-            0,
-            0
-        )
-
-    # ========================================================
-    # CHECKOUT TIMER
-    # ========================================================
+        return "COMPLETED", 0, 0
 
     if (
         state["checked_in"]
         and state["checkout_pending"]
         and state["visible_start"] is not None
     ):
-
         elapsed = (
             current_time
             - state["visible_start"]
@@ -941,24 +576,10 @@ def get_display_status(
             CHECK_OUT_SECONDS
         )
 
-    # ========================================================
-    # CHECKED IN
-    # ========================================================
-
     if state["checked_in"]:
-
-        return (
-            "CHECKED IN",
-            0,
-            0
-        )
-
-    # ========================================================
-    # CHECK-IN TIMER
-    # ========================================================
+        return "CHECKED IN", 0, 0
 
     if state["visible_start"] is not None:
-
         elapsed = (
             current_time
             - state["visible_start"]
@@ -975,20 +596,8 @@ def get_display_status(
             CHECK_IN_SECONDS
         )
 
-    # ========================================================
-    # DETECTED
-    # ========================================================
+    return "DETECTED", 0, 0
 
-    return (
-        "DETECTED",
-        0,
-        0
-    )
-
-
-# ============================================================
-# DRAW PERSON INFORMATION
-# ============================================================
 
 def draw_person_info(
     frame,
@@ -1000,69 +609,28 @@ def draw_person_info(
     score,
     current_time
 ):
-
     person_id = person["id"]
-
     person_name = person["name"]
 
-    state = attendance_state[
-        person_id
-    ]
-
-    status, elapsed, total = (
-        get_display_status(
-            person_id,
-            current_time
-        )
+    status, elapsed, total = get_display_status(
+        person_id,
+        current_time
     )
 
-    # ========================================================
-    # COLORS
-    # ========================================================
-
     if status == "CHECK IN":
-
-        box_color = (
-            0,
-            255,
-            255
-        )
+        box_color = (0, 255, 255)
 
     elif status == "CHECK OUT":
-
-        box_color = (
-            0,
-            165,
-            255
-        )
+        box_color = (0, 165, 255)
 
     elif status == "CHECKED IN":
-
-        box_color = (
-            0,
-            255,
-            0
-        )
+        box_color = (0, 255, 0)
 
     elif status == "COMPLETED":
-
-        box_color = (
-            255,
-            0,
-            255
-        )
+        box_color = (255, 0, 255)
 
     else:
-
-        box_color = (
-            255,
-            255,
-            255
-        )
-
-    # ========================================================
-    # FACE BOX
-    # ========================================================
+        box_color = (255, 255, 255)
 
     cv2.rectangle(
         frame,
@@ -1071,10 +639,6 @@ def draw_person_info(
         box_color,
         2
     )
-
-    # ========================================================
-    # NAME
-    # ========================================================
 
     name_text = (
         f"{person_name} "
@@ -1091,14 +655,7 @@ def draw_person_info(
         2
     )
 
-    # ========================================================
-    # STATUS
-    # ========================================================
-
-    status_y = max(
-        48,
-        y - 10
-    )
+    status_y = max(48, y - 10)
 
     cv2.putText(
         frame,
@@ -1110,12 +667,7 @@ def draw_person_info(
         2
     )
 
-    # ========================================================
-    # TIMER
-    # ========================================================
-
     if status == "CHECK IN":
-
         timer_text = (
             f"CHECK IN: "
             f"{elapsed:.1f} / "
@@ -1132,21 +684,10 @@ def draw_person_info(
             2
         )
 
-        # ----------------------------------------------------
-        # Progress bar
-        # ----------------------------------------------------
-
-        progress = (
-            elapsed / total
-        )
-
-        progress = max(
-            0,
-            min(1, progress)
-        )
+        progress = elapsed / total
+        progress = max(0, min(1, progress))
 
         bar_width = w
-
         filled_width = int(
             bar_width * progress
         )
@@ -1156,10 +697,7 @@ def draw_person_info(
         cv2.rectangle(
             frame,
             (x, bar_y),
-            (
-                x + bar_width,
-                bar_y + 8
-            ),
+            (x + bar_width, bar_y + 8),
             (80, 80, 80),
             -1
         )
@@ -1167,16 +705,12 @@ def draw_person_info(
         cv2.rectangle(
             frame,
             (x, bar_y),
-            (
-                x + filled_width,
-                bar_y + 8
-            ),
+            (x + filled_width, bar_y + 8),
             box_color,
             -1
         )
 
     elif status == "CHECK OUT":
-
         timer_text = (
             f"CHECK OUT: "
             f"{elapsed:.1f} / "
@@ -1193,21 +727,10 @@ def draw_person_info(
             2
         )
 
-        # ----------------------------------------------------
-        # Progress bar
-        # ----------------------------------------------------
-
-        progress = (
-            elapsed / total
-        )
-
-        progress = max(
-            0,
-            min(1, progress)
-        )
+        progress = elapsed / total
+        progress = max(0, min(1, progress))
 
         bar_width = w
-
         filled_width = int(
             bar_width * progress
         )
@@ -1217,10 +740,7 @@ def draw_person_info(
         cv2.rectangle(
             frame,
             (x, bar_y),
-            (
-                x + bar_width,
-                bar_y + 8
-            ),
+            (x + bar_width, bar_y + 8),
             (80, 80, 80),
             -1
         )
@@ -1228,16 +748,12 @@ def draw_person_info(
         cv2.rectangle(
             frame,
             (x, bar_y),
-            (
-                x + filled_width,
-                bar_y + 8
-            ),
+            (x + filled_width, bar_y + 8),
             box_color,
             -1
         )
 
     elif status == "CHECKED IN":
-
         cv2.putText(
             frame,
             "ATTENDANCE ACTIVE",
@@ -1249,7 +765,6 @@ def draw_person_info(
         )
 
     elif status == "COMPLETED":
-
         cv2.putText(
             frame,
             "ATTENDANCE COMPLETED",
@@ -1259,10 +774,6 @@ def draw_person_info(
             box_color,
             2
         )
-
-    # ========================================================
-    # MATCH SCORE
-    # ========================================================
 
     cv2.putText(
         frame,
@@ -1275,18 +786,11 @@ def draw_person_info(
     )
 
 
-# ============================================================
-# START CAMERA
-# ============================================================
-
 def start_camera():
-
     global camera
     global camera_running
 
-    print(
-        "Opening webcam..."
-    )
+    print("Opening webcam...")
 
     camera = cv2.VideoCapture(
         0,
@@ -1294,19 +798,12 @@ def start_camera():
     )
 
     if not camera.isOpened():
-
         camera.release()
 
-        camera = cv2.VideoCapture(
-            0
-        )
+        camera = cv2.VideoCapture(0)
 
     if not camera.isOpened():
-
-        print(
-            "ERROR: Could not open webcam."
-        )
-
+        print("ERROR: Could not open webcam.")
         return False
 
     camera.set(
@@ -1321,250 +818,131 @@ def start_camera():
 
     camera_running = True
 
-    print(
-        "Webcam opened successfully."
-    )
+    print("Webcam opened successfully.")
 
     return True
 
 
-# ============================================================
-# STOP CAMERA
-# ============================================================
-
 def stop_camera():
-
     global camera
     global camera_running
 
     camera_running = False
 
     if camera is not None:
-
         camera.release()
-
         camera = None
 
-    print(
-        "Webcam stopped."
-    )
+    print("Webcam stopped.")
 
-
-# ============================================================
-# DISPLAY STATUS
-# ============================================================
 
 def update_status_text():
-
     visible_names = []
-
     checked_in_names = []
-
     checkout_names = []
-
     completed_names = []
 
     for person in attendance_people:
-
         person_id = person["id"]
 
-        state = attendance_state[
-            person_id
-        ]
+        state = attendance_state[person_id]
 
         if state["currently_visible"]:
-
-            visible_names.append(
-                person["name"]
-            )
+            visible_names.append(person["name"])
 
         if state["checked_in"]:
-
-            checked_in_names.append(
-                person["name"]
-            )
+            checked_in_names.append(person["name"])
 
         if state["checkout_pending"]:
-
-            checkout_names.append(
-                person["name"]
-            )
+            checkout_names.append(person["name"])
 
         if state["completed_today"]:
-
-            completed_names.append(
-                person["name"]
-            )
-
-    # --------------------------------------------------------
-    # CHECKOUT
-    # --------------------------------------------------------
+            completed_names.append(person["name"])
 
     if checkout_names:
-
         status_label.config(
             text=(
                 "Checkout: "
-                + ", ".join(
-                    checkout_names
-                )
+                + ", ".join(checkout_names)
             ),
             fg="#ff9900"
         )
 
-    # --------------------------------------------------------
-    # CHECKED IN
-    # --------------------------------------------------------
-
     elif checked_in_names:
-
         status_label.config(
             text=(
                 "Checked in: "
-                + ", ".join(
-                    checked_in_names
-                )
+                + ", ".join(checked_in_names)
             ),
             fg="#00ff88"
         )
 
-    # --------------------------------------------------------
-    # COMPLETED
-    # --------------------------------------------------------
-
     elif completed_names:
-
         status_label.config(
             text=(
                 "Completed: "
-                + ", ".join(
-                    completed_names
-                )
+                + ", ".join(completed_names)
             ),
             fg="#ff00ff"
         )
 
-    # --------------------------------------------------------
-    # DETECTED
-    # --------------------------------------------------------
-
     elif visible_names:
-
         status_label.config(
             text=(
                 "Detected: "
-                + ", ".join(
-                    visible_names
-                )
+                + ", ".join(visible_names)
             ),
             fg="#00ffff"
         )
 
-    # --------------------------------------------------------
-    # READY
-    # --------------------------------------------------------
-
     else:
-
         status_label.config(
-            text=(
-                "Waiting for faces..."
-            ),
+            text="Waiting for faces...",
             fg="white"
         )
 
 
-# ============================================================
-# MAIN CAMERA LOOP
-# ============================================================
-
 def camera_loop():
-
     if not camera_running:
-
         return
 
     success, frame = camera.read()
 
     if not success:
-
-        root.after(
-            30,
-            camera_loop
-        )
-
+        root.after(30, camera_loop)
         return
 
-    # --------------------------------------------------------
-    # MIRROR
-    # --------------------------------------------------------
-
-    frame = cv2.flip(
-        frame,
-        1
-    )
+    frame = cv2.flip(frame, 1)
 
     original_frame = frame.copy()
 
     height, width = frame.shape[:2]
 
-    # --------------------------------------------------------
-    # FACE DETECTION
-    # --------------------------------------------------------
-
     detector.setInputSize(
         (width, height)
     )
 
-    _, faces = detector.detect(
-        frame
-    )
+    _, faces = detector.detect(frame)
 
     visible_ids = set()
-
     current_time = time.time()
 
-    # --------------------------------------------------------
-    # PROCESS FACES
-    # --------------------------------------------------------
-
     if faces is not None:
-
         for face in faces:
+            x, y, w, h = face[:4].astype(int)
 
-            x, y, w, h = (
-                face[:4].astype(int)
-            )
-
-            # ------------------------------------------------
-            # ALIGN FACE
-            # ------------------------------------------------
-
-            aligned_face = (
-                recognizer.alignCrop(
-                    original_frame,
-                    face
-                )
+            aligned_face = recognizer.alignCrop(
+                original_frame,
+                face
             )
 
             feature = recognizer.feature(
                 aligned_face
             )
 
-            # ------------------------------------------------
-            # FIND PERSON
-            # ------------------------------------------------
-
-            person, score = find_person(
-                feature
-            )
-
-            # ------------------------------------------------
-            # UNKNOWN FACE
-            # ------------------------------------------------
+            person, score = find_person(feature)
 
             if person is None:
-
                 cv2.rectangle(
                     frame,
                     (x, y),
@@ -1585,28 +963,14 @@ def camera_loop():
 
                 continue
 
-            # ------------------------------------------------
-            # PERSON FOUND
-            # ------------------------------------------------
-
             person_id = person["id"]
 
-            visible_ids.add(
-                person_id
-            )
-
-            # ------------------------------------------------
-            # PROCESS ATTENDANCE
-            # ------------------------------------------------
+            visible_ids.add(person_id)
 
             process_person(
                 person,
                 current_time
             )
-
-            # ------------------------------------------------
-            # DRAW INFORMATION
-            # ------------------------------------------------
 
             draw_person_info(
                 frame,
@@ -1619,33 +983,19 @@ def camera_loop():
                 current_time
             )
 
-    # ========================================================
-    # PROCESS PEOPLE NOT VISIBLE
-    # ========================================================
-
     process_missing_people(
         visible_ids,
         current_time
     )
 
-    # ========================================================
-    # UPDATE STATUS
-    # ========================================================
-
     update_status_text()
-
-    # ========================================================
-    # DISPLAY CAMERA
-    # ========================================================
 
     frame_rgb = cv2.cvtColor(
         frame,
         cv2.COLOR_BGR2RGB
     )
 
-    image = Image.fromarray(
-        frame_rgb
-    )
+    image = Image.fromarray(frame_rgb)
 
     image = image.resize(
         (960, 720)
@@ -1661,40 +1011,22 @@ def camera_loop():
 
     camera_label.image = photo
 
-    # ========================================================
-    # NEXT FRAME
-    # ========================================================
-
     root.after(
         30,
         camera_loop
     )
 
 
-# ============================================================
-# CLOSE PROGRAM
-# ============================================================
-
 def close_program():
-
     stop_camera()
-
     root.destroy()
 
 
-# ============================================================
-# GUI
-# ============================================================
-
 root = tk.Tk()
 
-root.title(
-    "Face Attendance System"
-)
+root.title("Face Attendance System")
 
-root.geometry(
-    "1000x850"
-)
+root.geometry("1000x850")
 
 root.configure(
     bg="#111111"
@@ -1705,10 +1037,6 @@ root.protocol(
     close_program
 )
 
-
-# ============================================================
-# TITLE
-# ============================================================
 
 title_label = tk.Label(
     root,
@@ -1723,10 +1051,6 @@ title_label.pack(
 )
 
 
-# ============================================================
-# SUBTITLE
-# ============================================================
-
 subtitle_label = tk.Label(
     root,
     text="Admin + Multi-candidate automatic attendance",
@@ -1740,10 +1064,6 @@ subtitle_label.pack(
 )
 
 
-# ============================================================
-# CAMERA
-# ============================================================
-
 camera_label = tk.Label(
     root,
     bg="black",
@@ -1753,10 +1073,6 @@ camera_label = tk.Label(
 
 camera_label.pack()
 
-
-# ============================================================
-# STATUS
-# ============================================================
 
 status_label = tk.Label(
     root,
@@ -1771,10 +1087,6 @@ status_label.pack(
 )
 
 
-# ============================================================
-# START
-# ============================================================
-
 print()
 print("==========================================")
 print("FACE ATTENDANCE SYSTEM")
@@ -1787,7 +1099,6 @@ print(
 print()
 
 if start_camera():
-
     status_label.config(
         text="Waiting for faces...",
         fg="white"
@@ -1799,15 +1110,10 @@ if start_camera():
     )
 
 else:
-
     status_label.config(
         text="Camera could not be opened.",
         fg="red"
     )
 
-
-# ============================================================
-# RUN GUI
-# ============================================================
 
 root.mainloop()
