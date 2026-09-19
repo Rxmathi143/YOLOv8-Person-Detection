@@ -8,10 +8,6 @@ from tkinter import messagebox
 from PIL import Image, ImageTk
 
 
-# ============================================================
-# PATHS
-# ============================================================
-
 FACE_DETECTOR = "models/face_detection_yunet_2026may.onnx"
 FACE_RECOGNIZER = "models/face_recognition_sface_2021dec.onnx"
 
@@ -21,34 +17,22 @@ CANDIDATE_FOLDER = "faces/candidates"
 CANDIDATE_DATA = "faces/candidates/candidates.json"
 
 
-# ============================================================
-# SETTINGS
-# ============================================================
-
 ADMIN_THRESHOLD = 0.45
 AUTO_CAPTURE_SECONDS = 2.0
 
 
-# ============================================================
-# CHECK FILES
-# ============================================================
-
+# Check required files
 if not os.path.exists(FACE_DETECTOR):
-
     print("ERROR: YuNet model not found.")
     print(f"Expected: {FACE_DETECTOR}")
     exit()
 
-
 if not os.path.exists(FACE_RECOGNIZER):
-
     print("ERROR: SFace model not found.")
     print(f"Expected: {FACE_RECOGNIZER}")
     exit()
 
-
 if not os.path.exists(ADMIN_FEATURE):
-
     print("ERROR: Admin is not registered.")
     print()
     print("Run:")
@@ -62,61 +46,32 @@ os.makedirs(
 )
 
 
-# ============================================================
-# LOAD ADMIN
-# ============================================================
-
-admin_feature = np.load(
-    ADMIN_FEATURE
-)
-
-
-# ============================================================
-# LOAD CANDIDATES
-# ============================================================
-
+# Load registered candidates
 if os.path.exists(CANDIDATE_DATA):
-
     try:
-
         with open(
             CANDIDATE_DATA,
             "r",
             encoding="utf-8"
         ) as file:
-
             candidates = json.load(file)
 
     except Exception:
-
         candidates = []
-
 else:
-
     candidates = []
 
 
-# ============================================================
-# GET NEXT CANDIDATE ID
-# ============================================================
-
 def get_next_candidate_id():
-
     if not candidates:
         return 1
 
     ids = []
 
     for candidate in candidates:
-
         try:
-
-            ids.append(
-                int(candidate["id"])
-            )
-
+            ids.append(int(candidate["id"]))
         except Exception:
-
             pass
 
     if not ids:
@@ -125,10 +80,7 @@ def get_next_candidate_id():
     return max(ids) + 1
 
 
-# ============================================================
-# LOAD OPENCV MODELS
-# ============================================================
-
+# Load OpenCV face models
 detector = cv2.FaceDetectorYN.create(
     FACE_DETECTOR,
     "",
@@ -138,16 +90,11 @@ detector = cv2.FaceDetectorYN.create(
     5000
 )
 
-
 recognizer = cv2.FaceRecognizerSF.create(
     FACE_RECOGNIZER,
     ""
 )
 
-
-# ============================================================
-# GLOBAL VARIABLES
-# ============================================================
 
 camera = None
 camera_running = False
@@ -167,12 +114,7 @@ candidate_registration_running = False
 name_window = None
 
 
-# ============================================================
-# FACE COMPARISON
-# ============================================================
-
 def compare_faces(feature1, feature2):
-
     return recognizer.match(
         feature1,
         feature2,
@@ -180,12 +122,7 @@ def compare_faces(feature1, feature2):
     )
 
 
-# ============================================================
-# START CAMERA
-# ============================================================
-
 def start_camera():
-
     global camera
     global camera_running
 
@@ -194,35 +131,20 @@ def start_camera():
 
     print("Opening webcam...")
 
-    # --------------------------------------------------------
-    # TRY CAMERA 0 WITH DIRECTSHOW
-    # --------------------------------------------------------
-
     camera = cv2.VideoCapture(
         0,
         cv2.CAP_DSHOW
     )
 
-    # --------------------------------------------------------
-    # FALLBACK
-    # --------------------------------------------------------
-
     if not camera.isOpened():
-
         print(
             "Camera 0 failed. Trying default camera..."
         )
 
         camera.release()
-
         camera = cv2.VideoCapture(0)
 
-    # --------------------------------------------------------
-    # CAMERA ERROR
-    # --------------------------------------------------------
-
     if not camera.isOpened():
-
         print()
         print("==========================================")
         print("ERROR: CAMERA COULD NOT BE OPENED")
@@ -239,10 +161,6 @@ def start_camera():
         camera = None
 
         return False
-
-    # --------------------------------------------------------
-    # CAMERA RESOLUTION
-    # --------------------------------------------------------
 
     camera.set(
         cv2.CAP_PROP_FRAME_WIDTH,
@@ -263,31 +181,20 @@ def start_camera():
     return True
 
 
-# ============================================================
-# STOP CAMERA
-# ============================================================
-
 def stop_camera():
-
     global camera
     global camera_running
 
     camera_running = False
 
     if camera is not None:
-
         camera.release()
         camera = None
 
     print("Webcam stopped.")
 
 
-# ============================================================
-# CAMERA UPDATE
-# ============================================================
-
 def update_camera():
-
     global current_frame
 
     if not camera_running:
@@ -299,10 +206,7 @@ def update_camera():
     success, frame = camera.read()
 
     if not success:
-
-        print(
-            "Unable to read webcam frame."
-        )
+        print("Unable to read webcam frame.")
 
         root.after(
             100,
@@ -310,10 +214,6 @@ def update_camera():
         )
 
         return
-
-    # --------------------------------------------------------
-    # MIRROR CAMERA
-    # --------------------------------------------------------
 
     frame = cv2.flip(
         frame,
@@ -324,26 +224,15 @@ def update_camera():
 
     height, width = frame.shape[:2]
 
-    # --------------------------------------------------------
-    # FACE DETECTION
-    # --------------------------------------------------------
-
     detector.setInputSize(
         (width, height)
     )
 
-    _, faces = detector.detect(
-        frame
-    )
+    _, faces = detector.detect(frame)
 
-    # --------------------------------------------------------
-    # DRAW FACE BOXES
-    # --------------------------------------------------------
-
+    # Display detected faces
     if faces is not None:
-
         for face in faces:
-
             x, y, w, h = face[:4].astype(int)
 
             cv2.rectangle(
@@ -353,10 +242,6 @@ def update_camera():
                 (0, 255, 0),
                 2
             )
-
-    # --------------------------------------------------------
-    # CONVERT BGR TO RGB
-    # --------------------------------------------------------
 
     frame_rgb = cv2.cvtColor(
         frame,
@@ -381,22 +266,13 @@ def update_camera():
 
     camera_label.image = photo
 
-    # --------------------------------------------------------
-    # CONTINUE CAMERA LOOP
-    # --------------------------------------------------------
-
     root.after(
         30,
         update_camera
     )
 
 
-# ============================================================
-# ADMIN VERIFICATION
-# ============================================================
-
 def verify_admin():
-
     global admin_verified
     global verification_running
 
@@ -418,12 +294,7 @@ def verify_admin():
     verify_admin_loop()
 
 
-# ============================================================
-# ADMIN VERIFICATION LOOP
-# ============================================================
-
 def verify_admin_loop():
-
     global admin_verified
     global verification_running
 
@@ -431,7 +302,6 @@ def verify_admin_loop():
         return
 
     if current_frame is None:
-
         root.after(
             100,
             verify_admin_loop
@@ -447,16 +317,9 @@ def verify_admin_loop():
         (width, height)
     )
 
-    _, faces = detector.detect(
-        frame
-    )
-
-    # --------------------------------------------------------
-    # ONE FACE
-    # --------------------------------------------------------
+    _, faces = detector.detect(frame)
 
     if faces is not None and len(faces) == 1:
-
         face = faces[0]
 
         aligned_face = recognizer.alignCrop(
@@ -473,12 +336,7 @@ def verify_admin_loop():
             feature
         )
 
-        # ----------------------------------------------------
-        # ADMIN MATCH
-        # ----------------------------------------------------
-
         if score >= ADMIN_THRESHOLD:
-
             print(
                 f"Admin verified. Score: {score:.3f}"
             )
@@ -498,34 +356,18 @@ def verify_admin_loop():
 
             return
 
-        # ----------------------------------------------------
-        # WRONG PERSON
-        # ----------------------------------------------------
-
-        else:
-
-            status_label.config(
-                text="Face detected, but this is not the admin.",
-                fg="red"
-            )
-
-    # --------------------------------------------------------
-    # MULTIPLE FACES
-    # --------------------------------------------------------
+        status_label.config(
+            text="Face detected, but this is not the admin.",
+            fg="red"
+        )
 
     elif faces is not None and len(faces) > 1:
-
         status_label.config(
             text="Only the admin should be visible.",
             fg="red"
         )
 
-    # --------------------------------------------------------
-    # NO FACE
-    # --------------------------------------------------------
-
     else:
-
         status_label.config(
             text="Please show the admin face.",
             fg="orange"
@@ -537,12 +379,7 @@ def verify_admin_loop():
     )
 
 
-# ============================================================
-# START CANDIDATE REGISTRATION
-# ============================================================
-
 def start_candidate_registration():
-
     global candidate_captured
     global candidate_feature
     global capture_start_time
@@ -562,12 +399,7 @@ def start_candidate_registration():
     candidate_capture_loop()
 
 
-# ============================================================
-# CANDIDATE CAPTURE
-# ============================================================
-
 def candidate_capture_loop():
-
     global capture_start_time
     global candidate_feature
     global candidate_captured
@@ -580,7 +412,6 @@ def candidate_capture_loop():
         return
 
     if current_frame is None:
-
         root.after(
             100,
             candidate_capture_loop
@@ -596,16 +427,9 @@ def candidate_capture_loop():
         (width, height)
     )
 
-    _, faces = detector.detect(
-        frame
-    )
-
-    # ========================================================
-    # NO FACE
-    # ========================================================
+    _, faces = detector.detect(frame)
 
     if faces is None or len(faces) == 0:
-
         capture_start_time = None
 
         status_label.config(
@@ -620,12 +444,7 @@ def candidate_capture_loop():
 
         return
 
-    # ========================================================
-    # MULTIPLE FACES
-    # ========================================================
-
     if len(faces) > 1:
-
         capture_start_time = None
 
         status_label.config(
@@ -640,10 +459,6 @@ def candidate_capture_loop():
 
         return
 
-    # ========================================================
-    # ONE FACE
-    # ========================================================
-
     face = faces[0]
 
     aligned_face = recognizer.alignCrop(
@@ -655,17 +470,13 @@ def candidate_capture_loop():
         aligned_face
     )
 
-    # ========================================================
-    # CHECK IF ADMIN
-    # ========================================================
-
+    # Prevent the admin from being registered as a candidate
     admin_score = compare_faces(
         admin_feature,
         feature
     )
 
     if admin_score >= ADMIN_THRESHOLD:
-
         capture_start_time = None
 
         status_label.config(
@@ -683,12 +494,7 @@ def candidate_capture_loop():
 
         return
 
-    # ========================================================
-    # START AUTO CAPTURE TIMER
-    # ========================================================
-
     if capture_start_time is None:
-
         capture_start_time = time.time()
 
     elapsed = (
@@ -699,12 +505,7 @@ def candidate_capture_loop():
         AUTO_CAPTURE_SECONDS - elapsed
     )
 
-    # ========================================================
-    # WAIT FOR 2 SECONDS
-    # ========================================================
-
     if remaining > 0:
-
         status_label.config(
             text=(
                 f"Candidate detected. "
@@ -720,10 +521,6 @@ def candidate_capture_loop():
 
         return
 
-    # ========================================================
-    # CAPTURE COMPLETE
-    # ========================================================
-
     candidate_feature = feature
 
     candidate_captured = True
@@ -734,48 +531,23 @@ def candidate_capture_loop():
         fg="green"
     )
 
-    print(
-        "Candidate face captured."
-    )
-
-    # ========================================================
-    # OPEN NAME POPUP
-    # ========================================================
+    print("Candidate face captured.")
 
     show_name_keypad()
 
 
-# ============================================================
-# NAME + ON-SCREEN KEYBOARD POPUP
-# ============================================================
-
 def show_name_keypad():
-
     global name_window
 
-    # --------------------------------------------------------
-    # PREVENT DUPLICATE POPUP
-    # --------------------------------------------------------
-
     if name_window is not None:
-
         try:
-
             if name_window.winfo_exists():
                 name_window.focus_force()
                 return
-
         except Exception:
-
             pass
 
-    # --------------------------------------------------------
-    # CREATE POPUP
-    # --------------------------------------------------------
-
-    name_window = tk.Toplevel(
-        root
-    )
+    name_window = tk.Toplevel(root)
 
     name_window.title(
         "Enter Candidate Name"
@@ -793,10 +565,6 @@ def show_name_keypad():
         False,
         False
     )
-
-    # --------------------------------------------------------
-    # CENTER POPUP
-    # --------------------------------------------------------
 
     root.update_idletasks()
 
@@ -824,21 +592,11 @@ def show_name_keypad():
         f"+{center_x}+{center_y}"
     )
 
-    # --------------------------------------------------------
-    # MAKE POPUP MODAL
-    # --------------------------------------------------------
-
-    name_window.transient(
-        root
-    )
+    name_window.transient(root)
 
     name_window.grab_set()
 
     name_window.focus_force()
-
-    # ========================================================
-    # TITLE
-    # ========================================================
 
     title = tk.Label(
         name_window,
@@ -852,10 +610,6 @@ def show_name_keypad():
         pady=(15, 8)
     )
 
-    # ========================================================
-    # INFORMATION
-    # ========================================================
-
     info = tk.Label(
         name_window,
         text="Use the keyboard below to enter the name",
@@ -867,10 +621,6 @@ def show_name_keypad():
     info.pack(
         pady=(0, 5)
     )
-
-    # ========================================================
-    # NAME ENTRY
-    # ========================================================
 
     name_entry = tk.Entry(
         name_window,
@@ -885,10 +635,6 @@ def show_name_keypad():
 
     name_entry.focus_set()
 
-    # ========================================================
-    # KEYPAD FRAME
-    # ========================================================
-
     keypad = tk.Frame(
         name_window,
         bg="#111111"
@@ -898,12 +644,7 @@ def show_name_keypad():
         pady=5
     )
 
-    # ========================================================
-    # ADD CHARACTER
-    # ========================================================
-
     def add_character(character):
-
         name_entry.insert(
             tk.END,
             character
@@ -911,16 +652,10 @@ def show_name_keypad():
 
         name_entry.focus_set()
 
-    # ========================================================
-    # BACKSPACE
-    # ========================================================
-
     def backspace():
-
         current = name_entry.get()
 
         if current:
-
             name_entry.delete(
                 len(current) - 1,
                 tk.END
@@ -928,12 +663,7 @@ def show_name_keypad():
 
         name_entry.focus_set()
 
-    # ========================================================
-    # CLEAR
-    # ========================================================
-
     def clear_name():
-
         name_entry.delete(
             0,
             tk.END
@@ -941,42 +671,27 @@ def show_name_keypad():
 
         name_entry.focus_set()
 
-    # ========================================================
-    # KEYS
-    # ========================================================
-
     keys = [
-
         [
             "A", "B", "C", "D",
             "E", "F", "G", "H", "I"
         ],
-
         [
             "J", "K", "L", "M",
             "N", "O", "P", "Q", "R"
         ],
-
         [
             "S", "T", "U", "V",
             "W", "X", "Y", "Z", "0"
         ],
-
         [
             "1", "2", "3", "4",
             "5", "6", "7", "8", "9"
         ]
-
     ]
 
-    # ========================================================
-    # CREATE KEYS
-    # ========================================================
-
     for row_index, row in enumerate(keys):
-
         for column_index, key in enumerate(row):
-
             button = tk.Button(
                 keypad,
                 text=key,
@@ -994,18 +709,13 @@ def show_name_keypad():
                 pady=2
             )
 
-    # ========================================================
-    # SPACE
-    # ========================================================
-
     space_button = tk.Button(
         keypad,
         text="SPACE",
         font=("Arial", 10, "bold"),
         width=11,
         height=1,
-        command=lambda:
-            add_character(" ")
+        command=lambda: add_character(" ")
     )
 
     space_button.grid(
@@ -1015,10 +725,6 @@ def show_name_keypad():
         padx=2,
         pady=5
     )
-
-    # ========================================================
-    # BACKSPACE
-    # ========================================================
 
     backspace_button = tk.Button(
         keypad,
@@ -1037,10 +743,6 @@ def show_name_keypad():
         pady=5
     )
 
-    # ========================================================
-    # CLEAR
-    # ========================================================
-
     clear_button = tk.Button(
         keypad,
         text="CLEAR",
@@ -1058,21 +760,11 @@ def show_name_keypad():
         pady=5
     )
 
-    # ========================================================
-    # SAVE CANDIDATE
-    # ========================================================
-
     def save_from_popup():
-
         global candidate_feature
         global name_window
 
-        # ----------------------------------------------------
-        # CHECK FACE
-        # ----------------------------------------------------
-
         if candidate_feature is None:
-
             messagebox.showerror(
                 "Error",
                 "Candidate face was not captured.",
@@ -1081,14 +773,9 @@ def show_name_keypad():
 
             return
 
-        # ----------------------------------------------------
-        # GET NAME
-        # ----------------------------------------------------
-
         name = name_entry.get().strip()
 
         if not name:
-
             messagebox.showwarning(
                 "Name Required",
                 "Please enter the candidate name.",
@@ -1097,15 +784,7 @@ def show_name_keypad():
 
             return
 
-        # ----------------------------------------------------
-        # CREATE ID
-        # ----------------------------------------------------
-
         candidate_id = get_next_candidate_id()
-
-        # ----------------------------------------------------
-        # FEATURE FILE
-        # ----------------------------------------------------
 
         feature_filename = (
             f"candidate_{candidate_id}.npy"
@@ -1116,43 +795,26 @@ def show_name_keypad():
             feature_filename
         )
 
-        # ----------------------------------------------------
-        # SAVE FACE FEATURE
-        # ----------------------------------------------------
-
         np.save(
             feature_path,
             candidate_feature
         )
 
-        # ----------------------------------------------------
-        # CREATE CANDIDATE DATA
-        # ----------------------------------------------------
-
         candidate_data = {
-
             "id": candidate_id,
-
             "name": name,
-
             "feature": feature_filename
-
         }
 
         candidates.append(
             candidate_data
         )
 
-        # ----------------------------------------------------
-        # SAVE JSON
-        # ----------------------------------------------------
-
         with open(
             CANDIDATE_DATA,
             "w",
             encoding="utf-8"
         ) as file:
-
             json.dump(
                 candidates,
                 file,
@@ -1169,10 +831,6 @@ def show_name_keypad():
         print("==========================================")
         print()
 
-        # ----------------------------------------------------
-        # SUCCESS MESSAGE
-        # ----------------------------------------------------
-
         messagebox.showinfo(
             "Registration Successful",
             f"Candidate registered successfully!\n\n"
@@ -1181,31 +839,16 @@ def show_name_keypad():
             parent=name_window
         )
 
-        # ----------------------------------------------------
-        # CLOSE POPUP
-        # ----------------------------------------------------
-
         try:
-
             name_window.grab_release()
-
         except Exception:
-
             pass
 
         name_window.destroy()
 
         name_window = None
 
-        # ----------------------------------------------------
-        # RESET REGISTRATION
-        # ----------------------------------------------------
-
         reset_registration()
-
-    # ========================================================
-    # SAVE BUTTON
-    # ========================================================
 
     save_button = tk.Button(
         name_window,
@@ -1224,40 +867,24 @@ def show_name_keypad():
         pady=(5, 3)
     )
 
-    # ========================================================
-    # CANCEL POPUP
-    # ========================================================
-
     def cancel_popup():
-
         global name_window
         global candidate_feature
         global candidate_captured
 
         try:
-
             name_window.grab_release()
-
         except Exception:
-
             pass
 
         name_window.destroy()
 
         name_window = None
 
-        # ----------------------------------------------------
-        # RESET CANDIDATE REGISTRATION
-        # ----------------------------------------------------
-
         candidate_feature = None
         candidate_captured = False
 
         reset_registration()
-
-    # ========================================================
-    # CANCEL BUTTON
-    # ========================================================
 
     cancel_button = tk.Button(
         name_window,
@@ -1272,22 +899,13 @@ def show_name_keypad():
         pady=3
     )
 
-    # ========================================================
-    # CLOSE X BUTTON
-    # ========================================================
-
     name_window.protocol(
         "WM_DELETE_WINDOW",
         cancel_popup
     )
 
 
-# ============================================================
-# RESET REGISTRATION
-# ============================================================
-
 def reset_registration():
-
     global candidate_feature
     global candidate_captured
     global capture_start_time
@@ -1296,15 +914,10 @@ def reset_registration():
     global candidate_registration_running
 
     candidate_feature = None
-
     candidate_captured = False
-
     capture_start_time = None
-
     admin_verified = False
-
     verification_running = False
-
     candidate_registration_running = False
 
     register_button.config(
@@ -1317,54 +930,26 @@ def reset_registration():
     )
 
 
-# ============================================================
-# CLOSE PROGRAM
-# ============================================================
-
 def close_program():
-
     global name_window
 
-    # --------------------------------------------------------
-    # CLOSE NAME POPUP IF OPEN
-    # --------------------------------------------------------
-
     if name_window is not None:
-
         try:
-
             name_window.grab_release()
-
         except Exception:
-
             pass
 
         try:
-
             name_window.destroy()
-
         except Exception:
-
             pass
 
         name_window = None
 
-    # --------------------------------------------------------
-    # STOP CAMERA
-    # --------------------------------------------------------
-
     stop_camera()
-
-    # --------------------------------------------------------
-    # CLOSE MAIN WINDOW
-    # --------------------------------------------------------
 
     root.destroy()
 
-
-# ============================================================
-# GUI
-# ============================================================
 
 root = tk.Tk()
 
@@ -1386,10 +971,6 @@ root.protocol(
 )
 
 
-# ============================================================
-# TITLE
-# ============================================================
-
 title_label = tk.Label(
     root,
     text="CANDIDATE REGISTRATION",
@@ -1402,10 +983,6 @@ title_label.pack(
     pady=(15, 5)
 )
 
-
-# ============================================================
-# SUBTITLE
-# ============================================================
 
 subtitle_label = tk.Label(
     root,
@@ -1420,10 +997,6 @@ subtitle_label.pack(
 )
 
 
-# ============================================================
-# CAMERA
-# ============================================================
-
 camera_label = tk.Label(
     root,
     bg="black",
@@ -1433,10 +1006,6 @@ camera_label = tk.Label(
 
 camera_label.pack()
 
-
-# ============================================================
-# REGISTER BUTTON
-# ============================================================
 
 register_button = tk.Button(
     root,
@@ -1456,10 +1025,6 @@ register_button.pack(
 )
 
 
-# ============================================================
-# MESSAGE
-# ============================================================
-
 message_label = tk.Label(
     root,
     text="Register your candidates faces",
@@ -1470,10 +1035,6 @@ message_label = tk.Label(
 
 message_label.pack()
 
-
-# ============================================================
-# STATUS
-# ============================================================
 
 status_label = tk.Label(
     root,
@@ -1487,10 +1048,6 @@ status_label.pack(
     pady=8
 )
 
-
-# ============================================================
-# START GUI
-# ============================================================
 
 print()
 print("==========================================")
