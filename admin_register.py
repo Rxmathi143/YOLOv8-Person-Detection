@@ -3,10 +3,6 @@ import os
 import numpy as np
 
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
-
 FACE_DETECTOR = "models/face_detection_yunet_2026may.onnx"
 FACE_RECOGNIZER = "models/face_recognition_sface_2021dec.onnx"
 
@@ -14,10 +10,7 @@ ADMIN_IMAGE = "faces/admin.jpg"
 ADMIN_FEATURE = "faces/admin.npy"
 
 
-# ============================================================
-# CHECK MODEL FILES
-# ============================================================
-
+# Check required model files
 if not os.path.exists(FACE_DETECTOR):
     print("ERROR: YuNet model not found.")
     print(f"Expected: {FACE_DETECTOR}")
@@ -29,17 +22,10 @@ if not os.path.exists(FACE_RECOGNIZER):
     exit()
 
 
-# ============================================================
-# CREATE FOLDERS
-# ============================================================
-
 os.makedirs("faces", exist_ok=True)
 
 
-# ============================================================
-# LOAD FACE MODELS
-# ============================================================
-
+# Load face detection and recognition models
 detector = cv2.FaceDetectorYN.create(
     FACE_DETECTOR,
     "",
@@ -54,10 +40,6 @@ recognizer = cv2.FaceRecognizerSF.create(
     ""
 )
 
-
-# ============================================================
-# OPEN CAMERA
-# ============================================================
 
 camera = cv2.VideoCapture(0)
 
@@ -82,10 +64,6 @@ print("==========================================")
 captured = False
 
 
-# ============================================================
-# CAMERA LOOP
-# ============================================================
-
 while True:
 
     success, frame = camera.read()
@@ -102,10 +80,7 @@ while True:
 
     _, faces = detector.detect(frame)
 
-    # --------------------------------------------------------
-    # DRAW DETECTED FACE
-    # --------------------------------------------------------
-
+    # Display detected face
     if faces is not None:
 
         for face in faces:
@@ -129,11 +104,6 @@ while True:
                 (0, 255, 0),
                 2
             )
-
-
-    # --------------------------------------------------------
-    # INSTRUCTIONS
-    # --------------------------------------------------------
 
     cv2.putText(
         frame,
@@ -165,20 +135,11 @@ while True:
         2
     )
 
-
-    cv2.imshow(
-        "Admin Face Registration",
-        frame
-    )
-
+    cv2.imshow("Admin Face Registration", frame)
 
     key = cv2.waitKey(1) & 0xFF
 
-
-    # --------------------------------------------------------
-    # CAPTURE
-    # --------------------------------------------------------
-
+    # Capture admin face
     if key == ord(" "):
 
         if faces is None or len(faces) == 0:
@@ -188,7 +149,6 @@ while True:
             print("Please position your face in front of the camera.")
             continue
 
-
         if len(faces) > 1:
 
             print()
@@ -196,40 +156,29 @@ while True:
             print("Only the admin should be visible.")
             continue
 
-
-        # Exactly one face
         face = faces[0]
 
-
-        # Align face
+        # Align and extract face features
         aligned_face = recognizer.alignCrop(
             frame,
             face
         )
 
-
-        # Extract face feature
         feature = recognizer.feature(
             aligned_face
         )
 
-
-        # Save admin image
         cv2.imwrite(
             ADMIN_IMAGE,
             frame
         )
 
-
-        # Save admin feature
         np.save(
             ADMIN_FEATURE,
             feature
         )
 
-
         captured = True
-
 
         print()
         print("==========================================")
@@ -241,24 +190,15 @@ while True:
         print("==========================================")
         print()
 
-
         break
 
-
-    # --------------------------------------------------------
-    # QUIT
-    # --------------------------------------------------------
-
+    # Cancel registration
     if key == ord("q"):
 
         print()
         print("Admin registration cancelled.")
         break
 
-
-# ============================================================
-# CLEANUP
-# ============================================================
 
 camera.release()
 cv2.destroyAllWindows()
